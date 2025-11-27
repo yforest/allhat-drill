@@ -11,7 +11,7 @@ import { useAuth } from './contexts/AuthContext';
 type View = 'dashboard' | 'report';
 
 const App: React.FC = () => {
-  const { data, isLoading, error } = useDataFetch();
+  const { data, isLoading, error, refetch } = useDataFetch();
   const { isAuthenticated, isAuthReady, logout } = useAuth();
 
   const [view, setView] = useState<View>('dashboard');
@@ -89,7 +89,11 @@ const App: React.FC = () => {
           </>
         ) : (
           <section>
-            <ReportForm onCancel={() => setView('dashboard')} onSubmitted={() => setView('dashboard')} />
+            <ReportForm onCancel={() => setView('dashboard')} onSubmitted={() => {
+              setView('dashboard');
+              // refetch は ReportForm からも実行しますが、念のためここでも呼ぶ
+              void refetch();
+            }} refetch={refetch} />
           </section>
         )}
       </main>

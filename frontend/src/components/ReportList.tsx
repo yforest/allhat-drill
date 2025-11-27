@@ -1,11 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import type { DrillReport } from '../types/api';
 
 interface Props {
   reports: DrillReport[];
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'https://hitobou.com/allhat/drill/wpcms/wp-json';
+
 const ReportList: React.FC<Props> = ({ reports }) => {
+  const [mediaMap, setMediaMap] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    const ids = Array.from(new Set(reports.map((r) => (r as any).featured_media).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    ids.forEach(async (id) => {
+      if (mediaMap[id]) return;
+      try {
+        const res = await axios.get(`${API_BASE}/wp/v2/media/${id}`);
+        const url = res.data?.source_url ?? null;
+        if (url) {
+          setMediaMap((m) => ({ ...m, [id]: url }));
+        }
+      } catch (err) {
+        // ignore
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reports]);
+
   if (!reports || reports.length === 0) {
     return (
       <div className="w-full bg-white rounded-lg p-6 shadow border border-gray-200 text-center">
@@ -22,9 +46,12 @@ const ReportList: React.FC<Props> = ({ reports }) => {
         const org = (acf as any).organization ?? '';
         const typesRaw = (acf.drill_types ?? '').toString();
         const types = typesRaw ? typesRaw.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+        const featuredId = (r as any).featured_media as number | undefined;
+        const thumb = featuredId ? mediaMap[featuredId] : null;
 
         return (
           <div key={r.id} className="bg-white rounded-lg p-4 shadow border border-gray-200">
+            {thumb && <img src={thumb} alt="thumb" className="w-full h-32 object-cover rounded mb-3" />}
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-semibold" dangerouslySetInnerHTML={{ __html: r.title?.rendered ?? '無題' }} />

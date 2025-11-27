@@ -6,6 +6,7 @@ import type { DrillReport } from '../types/api';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+import axios from 'axios';
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -29,11 +30,34 @@ interface Props {
   reports: DrillReport[]; // 動的にマーカー描画
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'https://hitobou.com/allhat/drill/wpcms/wp-json';
+
 const Map: React.FC<Props> = ({ reports }) => {
   const [mapReloadKey, setMapReloadKey] = useState(0);
+  const [mediaMap, setMediaMap] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setMapReloadKey((k) => k + 1);
+  }, [reports]);
+
+  useEffect(() => {
+    // featured_media がある報告の media URL を取得する
+    const ids = Array.from(new Set(reports.map((r) => (r as any).featured_media).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    ids.forEach(async (id) => {
+      if (mediaMap[id]) return;
+      try {
+        const res = await axios.get(`${API_BASE}/wp/v2/media/${id}`);
+        const url = res.data?.source_url ?? null;
+        if (url) {
+          setMediaMap((m) => ({ ...m, [id]: url }));
+        }
+      } catch (err) {
+        // ignore
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reports]);
 
   const defaultCenter: [number, number] = [34.697, 135.216];
@@ -75,7 +99,14 @@ const Map: React.FC<Props> = ({ reports }) => {
         <RecenterMap />
         {markers.map((m) => (
           <Marker key={m.id} position={[m.lat, m.lng]}>
-            <Popup dangerouslySetInnerHTML={{ __html: m.title }} />
+            <Popup>
+              <div>
+                <div dangerouslySetInnerHTML={{ __html: m.title }} />
+                {(reports.find(r => r.id === m.id) as any)?.featured_media && mediaMap[(reports.find(r => r.id === m.id) as any).featured_media] && (
+                  <img src={mediaMap[(reports.find(r => r.id === m.id) as any).featured_media]} alt="photo" className="mt-2 w-full max-h-40 object-cover rounded" />
+                )}
+              </div>
+            </Popup>
           </Marker>
         ))}
       </MapContainer>
