@@ -1,73 +1,34 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import React, { useEffect, useState } from 'react'; // useStateをインポート
+import React from 'react';
+import Map from './components/Map';
+import Chart from './components/Chart';
+import StatsCard from './components/StatsCard';
 
-// Leafletのデフォルトアイコン設定（Vite環境でのバグ修正）
-import icon from 'leaflet/dist/images/marker-icon.png';
-import iconShadow from 'leaflet/dist/images/marker-shadow.png';
-
-let DefaultIcon = L.icon({
-    iconUrl: icon,
-    shadowUrl: iconShadow,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41]
-});
-
-L.Marker.prototype.options.icon = DefaultIcon;
-
-// 地図のサイズを強制的に再計算するコンポーネント
-const RecenterMap = () => {
-    const map = useMap();
-    useEffect(() => {
-        // マップが描画された後、ブラウザの描画タイミングに合わせてサイズを再計算させる
-        const timeoutId = setTimeout(() => {
-            map.invalidateSize();
-        }, 0); // ゼロディレイで次のイベントループに処理を渡す
-        
-        return () => clearTimeout(timeoutId);
-    }, [map]);
-    return null; 
-};
-
-const Map = () => {
-  // マップの再初期化を強制するためのキー
-  const [mapReloadKey, setMapReloadKey] = useState(0);
-
-  // HAT神戸周辺の座標 (緯度, 経度)
-  const position: [number, number] = [34.697, 135.216];
-
-  // コンポーネントがマウントされた後に一度だけキーを更新し、地図の再描画を誘発
-  useEffect(() => {
-    // 開発中の問題を解決するため、初回描画後にキーを更新
-    setMapReloadKey(prev => prev + 1);
-  }, []); 
-
+const App: React.FC = () => {
   return (
-    // Tailwindのheightクラス h-96 (384px) を指定
-    <div className="h-96 w-full rounded-lg overflow-hidden shadow-lg border border-gray-200 z-0">
-      <MapContainer 
-        key={mapReloadKey} // キーを付与して再初期化を強制
-        center={position} 
-        zoom={14} 
-        scrollWheelZoom={false} 
-        // MapContainer自体にも明示的に高さを指定
-        className="h-full w-full"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {/* 再計算コンポーネントをMapContainer内に配置 */}
-        <RecenterMap /> 
-        <Marker position={position}>
-          <Popup>
-            HAT神戸<br />防災訓練実施ポイント
-          </Popup>
-        </Marker>
-      </MapContainer>
+    <div className="min-h-screen bg-gray-50">
+      <header className="py-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <h1 className="text-2xl font-semibold">ALL HAT 防災ダッシュボード</h1>
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-4 space-y-6 pb-8">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatsCard title="参加者数" value="1,234" subtitle="累計参加者" />
+          <StatsCard title="訓練回数" value="12" subtitle="今年" />
+          <StatsCard title="達成率" value="87%" subtitle="目標達成率" />
+        </section>
+
+        <section>
+          <Chart />
+        </section>
+
+        <section>
+          <Map />
+        </section>
+      </main>
     </div>
   );
 };
 
-export default Map;
+export default App;
