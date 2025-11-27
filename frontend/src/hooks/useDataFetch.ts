@@ -17,20 +17,21 @@ export type UseDataFetchResult = {
 };
 
 // 簡易モック（API未準備時のフォールバック）
+// NOTE: フロントで期待する ACF キー名に合わせて `lat` / `lng` を使う
 const MOCK_POSTS: DrillReport[] = [
   {
     id: 1,
     date: new Date().toISOString(),
     title: { rendered: 'モック: シェイクアウト' },
     content: { rendered: 'モックデータ' },
-    acf: { participants_count: 100, drill_types: 'シェイクアウト', location_lat: 34.697, location_lng: 135.216 }
+    acf: { participants_count: 100, drill_types: 'シェイクアウト', lat: 34.697, lng: 135.216 }
   },
   {
     id: 2,
     date: new Date().toISOString(),
     title: { rendered: 'モック: 炊き出し' },
     content: { rendered: 'モックデータ2' },
-    acf: { participants_count: 50, drill_types: '炊き出し', location_lat: 34.698, location_lng: 135.217 }
+    acf: { participants_count: 50, drill_types: '炊き出し', lat: 34.698, lng: 135.217 }
   }
 ];
 
@@ -47,10 +48,30 @@ export function useDataFetch(): UseDataFetchResult {
       const posts = Array.isArray(res.data) ? res.data : [];
       const effectivePosts = posts.length > 0 ? posts : MOCK_POSTS;
 
+      // 取得した posts を正規化（effectivePosts を使う）
+      const normalizedPosts = effectivePosts.map((post) => {
+        const acf = post.acf ?? {};
+        const parseNum = (v: any) => {
+          if (v == null || v === '') return null;
+          const n = Number(String(v).replace(/[^\d.\-]/g, ''));
+          return Number.isNaN(n) ? null : n;
+        };
+        return {
+          ...post,
+          acf: {
+            ...acf,
+            participants_count: parseNum(acf.participants_count),
+            // 互換性のため複数キー候補を参照
+            lat: parseNum(acf.lat ?? acf.location_lat ?? acf.latitude),
+            lng: parseNum(acf.lng ?? acf.location_lng ?? acf.longitude),
+          }
+        };
+      });
+
       let totalParticipants = 0;
       const typeCounts: Record<string, number> = {};
 
-      effectivePosts.forEach((post) => {
+      normalizedPosts.forEach((post) => {
         const acf = post.acf ?? {};
         const pc = acf.participants_count ?? 0;
         const pcNum = typeof pc === 'string' ? parseInt(pc.replace(/[^\d]/g, ''), 10) || 0 : Number(pc) || 0;
@@ -72,9 +93,9 @@ export function useDataFetch(): UseDataFetchResult {
       }));
 
       const appData: AppData = {
-        reports: effectivePosts,
+        reports: normalizedPosts,
         totalParticipants,
-        totalDrills: effectivePosts.length,
+        totalDrills: normalizedPosts.length,
         chartData,
       };
 
