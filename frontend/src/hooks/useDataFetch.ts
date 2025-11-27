@@ -1,4 +1,3 @@
-// src/hooks/useDataFetch.ts
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import type { AppData, DrillReport, ChartData } from '../types/api';

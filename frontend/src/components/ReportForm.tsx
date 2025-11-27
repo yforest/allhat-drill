@@ -3,192 +3,122 @@ import axios from 'axios';
 import imageCompression from 'browser-image-compression';
 import { useAuth } from '../contexts/AuthContext';
 
-interface Props {
-  onCancel?: () => void;
-  onSubmitted?: () => void;
-  refetch?: () => Promise<void>;
-}
+const DEFAULT_API_URL = 'https://hitobou.com/allhat/drill/wpcms/wp-json/wp/v2/posts';
+const API_URL = (import.meta.env.VITE_API_URL as string) || DEFAULT_API_URL;
+const API_BASE = API_URL.replace(/\/wp\/v2\/posts\/?$/, '') || (import.meta.env.VITE_API_BASE as string) || 'https://hitobou.com/allhat/drill/wpcms/wp-json';
 
-const DRILL_TYPES = ['シェイクアウト', '炊き出し', '避難訓練', '応急救護', '情報伝達'];
+type Props = {
+  onSuccess?: () => void;
+};
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'https://hitobou.com/allhat/drill/wpcms/wp-json';
-
-const ReportForm: React.FC<Props> = ({ onCancel, onSubmitted, refetch }) => {
+export default function ReportForm({ onSuccess }: Props) {
   const { token } = useAuth();
-  const [organization, setOrganization] = useState('');
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
   const [participants, setParticipants] = useState<number | ''>('');
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
-  const [lat, setLat] = useState<string>('');
-  const [lng, setLng] = useState<string>('');
-  const [file, setFile] = useState<File | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [geoError, setGeoError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [types, setTypes] = useState('');
+  const [lat, setLat] = useState<number | ''>('');
+  const [lng, setLng] = useState<number | ''>('');
+  const [files, setFiles] = useState<FileList | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const toggleType = (t: string) => {
-    setSelectedTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
-  };
-
-  const getLocation = () => {
-    setGeoError(null);
-    if (!navigator.geolocation) {
-      setGeoError('このブラウザでは位置情報が取得できません');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLat(String(pos.coords.latitude));
-        setLng(String(pos.coords.longitude));
-      },
-      (err) => {
-        setGeoError(err.message || '位置情報の取得に失敗しました');
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    setFile(f);
-    setFileName(f ? f.name : null);
-  };
-
-  const uploadMedia = async (fileToUpload: File) => {
-    // 圧縮オプション
-    const options = { maxSizeMB: 0.7, maxWidthOrHeight: 1920, useWebWorker: true };
-    const compressedFile = await imageCompression(fileToUpload, options);
+  const uploadMedia = async (file: File) => {
+    const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1600, useWebWorker: true });
     const form = new FormData();
-    form.append('file', compressedFile, fileToUpload.name);
-
-    const headers: Record<string, string> = {
-      Authorization: token ? `Bearer ${token}` : '',
-    };
-
-    const url = `${API_BASE}/wp/v2/media`;
-    const res = await axios.post(url, form, {
-      headers: {
-        ...headers,
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    // WP returns JSON with id and source_url
-    return res.data;
+    form.append('file', compressed, compressed.name || file.name);
+    const headers: any = { 'Content-Disposition': `attachment; filename="${file.name}"` };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await axios.post(`${API_BASE}/wp/v2/media`, form, { headers });
+    return res.data.id as number;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
+    setLoading(true);
     setError(null);
-
     try {
-      let mediaId: number | null = null;
-      if (file) {
-        const mediaRes = await uploadMedia(file);
-        mediaId = mediaRes?.id ?? null;
+      let featured_media = 0;
+      if (files && files.length > 0) {
+        // upload first file and set as featured
+        featured_media = await uploadMedia(files[0]);
       }
+
+      const acfPayload: Record<string, any> = {
+        participants_count: participants === '' ? null : Number(participants),
+        drill_types: types || null,
+        lat: lat === '' ? null : Number(lat),
+        lng: lng === '' ? null : Number(lng),
+      };
 
       const postPayload: any = {
-        title: `${organization || '報告'} - ${date}`,
+        title,
+        content,
         status: 'publish',
-        content: `参加者: ${participants || '不明'}<br/>団体: ${organization || 'なし'}<br/>訓練種別: ${selectedTypes.join(', ')}`,
-        // attempt to include ACF fields (site may accept this if configured)
-        acf: {
-          participants_count: participants === '' ? null : Number(participants),
-          drill_types: selectedTypes.join(','),
-          location_lat: lat || null,
-          location_lng: lng || null,
-        },
+        acf: acfPayload,
       };
+      if (featured_media) postPayload.featured_media = featured_media;
 
-      if (mediaId) {
-        postPayload.featured_media = mediaId;
-      }
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
 
-      const headers: Record<string, string> = {
-        Authorization: token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      };
+      await axios.post(`${API_BASE}/wp/v2/posts`, postPayload, { headers });
 
-      const postUrl = `${API_BASE}/wp/v2/posts`;
-      const res = await axios.post(postUrl, postPayload, { headers });
-      console.log('Post created:', res.data);
-
-      if (onSubmitted) onSubmitted();
-      if (refetch) await refetch();
-
-      alert('投稿が完了しました');
+      setTitle('');
+      setContent('');
+      setParticipants('');
+      setTypes('');
+      setLat('');
+      setLng('');
+      setFiles(null);
+      if (onSuccess) onSuccess();
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message ?? '送信に失敗しました');
+      setError(err?.response?.data?.message || err.message || '投稿に失敗しました');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto bg-white rounded-lg p-6 shadow border border-gray-200">
-      <h2 className="text-lg font-semibold mb-4">報告フォーム</h2>
-
-      {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && <div className="text-red-600">{error}</div>}
+      <div>
+        <label className="block text-sm font-medium">タイトル</label>
+        <input className="mt-1 block w-full" value={title} onChange={(e) => setTitle(e.target.value)} required />
+      </div>
+      <div>
+        <label className="block text-sm font-medium">内容</label>
+        <textarea className="mt-1 block w-full" value={content} onChange={(e) => setContent(e.target.value)} rows={4} />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-sm text-gray-600">団体名（任意）</label>
-          <input value={organization} onChange={(e) => setOrganization(e.target.value)} className="w-full mt-1 p-2 border rounded" />
+          <label className="block text-sm font-medium">参加者数</label>
+          <input type="number" className="mt-1 block w-full" value={participants} onChange={(e) => setParticipants(e.target.value === '' ? '' : Number(e.target.value))} />
         </div>
-
         <div>
-          <label className="block text-sm text-gray-600">参加人数</label>
-          <input type="number" value={participants} onChange={(e) => setParticipants(e.target.value === '' ? '' : Number(e.target.value))} className="w-full mt-1 p-2 border rounded" />
+          <label className="block text-sm font-medium">訓練種別（カンマ区切り）</label>
+          <input className="mt-1 block w-full" value={types} onChange={(e) => setTypes(e.target.value)} />
         </div>
-
+      </div>
+      <div className="grid grid-cols-2 gap-2">
         <div>
-          <div className="text-sm text-gray-600 mb-2">訓練種別（複数選択可）</div>
-          <div className="flex flex-wrap gap-3">
-            {DRILL_TYPES.map((t) => (
-              <label key={t} className="inline-flex items-center space-x-2">
-                <input type="checkbox" checked={selectedTypes.includes(t)} onChange={() => toggleType(t)} />
-                <span className="text-sm">{t}</span>
-              </label>
-            ))}
-          </div>
+          <label className="block text-sm font-medium">緯度 (lat)</label>
+          <input className="mt-1 block w-full" value={lat} onChange={(e) => setLat(e.target.value === '' ? '' : Number(e.target.value))} />
         </div>
-
         <div>
-          <label className="block text-sm text-gray-600">実施日</label>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1 p-2 border rounded" />
+          <label className="block text-sm font-medium">経度 (lng)</label>
+          <input className="mt-1 block w-full" value={lng} onChange={(e) => setLng(e.target.value === '' ? '' : Number(e.target.value))} />
         </div>
-
-        <div>
-          <div className="flex items-center gap-3">
-            <div>
-              <div className="text-sm text-gray-600">現在地（緯度/経度）</div>
-              <div className="text-sm text-gray-700">{lat && lng ? `${lat}, ${lng}` : '未取得'}</div>
-              {geoError && <div className="text-xs text-red-600 mt-1">{geoError}</div>}
-            </div>
-            <button type="button" onClick={getLocation} className="ml-auto bg-blue-600 text-white px-3 py-1 rounded">
-              位置取得
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm text-gray-600">写真（任意）</label>
-          <input type="file" accept="image/*" onChange={handleFileChange} className="mt-1" />
-          {fileName && <div className="text-xs text-gray-600 mt-1">選択: {fileName}</div>}
-        </div>
-
-        <div className="flex gap-3 items-center">
-          <button type="submit" disabled={submitting} className="bg-green-600 text-white px-4 py-2 rounded">
-            {submitting ? '送信中...' : '送信'}
-          </button>
-          <button type="button" onClick={onCancel} className="px-4 py-2 border rounded">キャンセル</button>
-        </div>
-      </form>
-    </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium">画像（任意）</label>
+        <input type="file" accept="image/*" onChange={(e) => setFiles(e.target.files)} />
+      </div>
+      <div>
+        <button className="px-4 py-2 bg-blue-600 text-white rounded" type="submit" disabled={loading}>
+          {loading ? '送信中...' : '投稿する'}
+        </button>
+      </div>
+    </form>
   );
-};
-
-export default ReportForm;
+}
