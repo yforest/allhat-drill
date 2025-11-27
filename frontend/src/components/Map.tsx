@@ -36,14 +36,12 @@ const Map: React.FC<Props> = ({ reports }) => {
     setMapReloadKey((k) => k + 1);
   }, [reports]);
 
-  // 中心座標: 最初の報告の座標があればそれを使う、なければ HAT神戸のデフォルト
   const defaultCenter: [number, number] = [34.697, 135.216];
   const first = reports && reports.length > 0 ? reports[0] : null;
   const center: [number, number] = first && first.acf && first.acf.location_lat && first.acf.location_lng
     ? [Number(first.acf.location_lat), Number(first.acf.location_lng)]
     : defaultCenter;
 
-  // マーカー配列を作成
   const markers = reports
     .map((r) => {
       const lat = r.acf?.location_lat;
@@ -57,7 +55,12 @@ const Map: React.FC<Props> = ({ reports }) => {
     .filter(Boolean) as { id: number; lat: number; lng: number; title: string }[];
 
   return (
-    <div className="h-96 w-full rounded-lg overflow-hidden shadow-lg border border-gray-200 z-0">
+    <div className="h-96 w-full rounded-lg overflow-hidden shadow-lg border border-gray-200 z-0 relative">
+      {markers.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
+          <div className="text-gray-600">まだ報告がありません</div>
+        </div>
+      )}
       <MapContainer
         key={mapReloadKey}
         center={center}
