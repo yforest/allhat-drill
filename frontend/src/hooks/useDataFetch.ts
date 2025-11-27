@@ -15,22 +15,20 @@ export type UseDataFetchResult = {
   refetch: () => Promise<void>;
 };
 
-// 簡易モック（API未準備時のフォールバック）
-// NOTE: フロントで期待する ACF キー名に合わせて `lat` / `lng` を使う
 const MOCK_POSTS: DrillReport[] = [
   {
     id: 1,
     date: new Date().toISOString(),
     title: { rendered: 'モック: シェイクアウト' },
     content: { rendered: 'モックデータ' },
-    acf: { participants_count: 100, drill_types: 'シェイクアウト', lat: 34.697, lng: 135.216 }
+    acf: { participants_count: 100, drill_types: 'シェイクアウト', location_lat: 34.697, location_lng: 135.216 }
   },
   {
     id: 2,
     date: new Date().toISOString(),
     title: { rendered: 'モック: 炊き出し' },
     content: { rendered: 'モックデータ2' },
-    acf: { participants_count: 50, drill_types: '炊き出し', lat: 34.698, lng: 135.217 }
+    acf: { participants_count: 50, drill_types: '炊き出し', location_lat: 34.698, location_lng: 135.217 }
   }
 ];
 
@@ -43,11 +41,15 @@ export function useDataFetch(): UseDataFetchResult {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await axios.get<DrillReport[]>(API_URL, { timeout: 8000 });
+      // JWT取得（あれば含める、なくても取得試行）
+      const token = localStorage.getItem('jwt_token');
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await axios.get<DrillReport[]>(API_URL, { timeout: 8000, headers });
       const posts = Array.isArray(res.data) ? res.data : [];
       const effectivePosts = posts.length > 0 ? posts : MOCK_POSTS;
 
-      // 取得した posts を正規化（effectivePosts を使う）
       const normalizedPosts = effectivePosts.map((post) => {
         const acf = post.acf ?? {};
         const parseNum = (v: any) => {
@@ -60,9 +62,9 @@ export function useDataFetch(): UseDataFetchResult {
           acf: {
             ...acf,
             participants_count: parseNum(acf.participants_count),
-            // 互換性のため複数キー候補を参照
-            lat: parseNum(acf.lat ?? acf.location_lat ?? acf.latitude),
-            lng: parseNum(acf.lng ?? acf.location_lng ?? acf.longitude),
+            // location_lat / location_lng を優先、互換性のため lat/lng も参照
+            location_lat: parseNum(acf.location_lat ?? acf.lat ?? acf.latitude),
+            location_lng: parseNum(acf.location_lng ?? acf.lng ?? acf.longitude),
           }
         };
       });
