@@ -28,3 +28,4 @@ wp-config.phpにはDB情報が含まれるため、絶対にGitに含めない
 /wpcms/.env
 /wpcms/.ftp_user
 /wpcms/backup/
+node_modules
