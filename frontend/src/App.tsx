@@ -2,8 +2,50 @@ import React from 'react';
 import Map from './components/Map';
 import Chart from './components/Chart';
 import StatsCard from './components/StatsCard';
+import LoginForm from './components/LoginForm';
+import { useDataFetch } from './hooks/useDataFetch';
+import { useAuth } from './contexts/AuthContext';
 
 const App: React.FC = () => {
+  const { data, isLoading, error } = useDataFetch();
+  const { isAuthenticated, isAuthReady } = useAuth();
+
+  // 認証初期化待ち（localStorage の読み込みが完了するまで待つ）
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">認証情報を初期化しています...</div>
+      </div>
+    );
+  }
+
+  // 未認証なら LoginForm を表示（確実にダッシュボードを隠す）
+  if (!isAuthenticated) {
+    return <LoginForm />;
+  }
+
+  // 認証済みユーザー向けダッシュボード
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-gray-600">読み込み中...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-600">データ取得中にエラーが発生しました: {error.message}</div>
+      </div>
+    );
+  }
+
+  const reports = data?.reports ?? [];
+  const totalParticipants = data?.totalParticipants ?? 0;
+  const totalDrills = data?.totalDrills ?? 0;
+  const chartData = data?.chartData ?? [];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="py-8">
@@ -14,17 +56,17 @@ const App: React.FC = () => {
 
       <main className="max-w-6xl mx-auto px-4 space-y-6 pb-8">
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatsCard title="参加者数" value="1,234" subtitle="累計参加者" />
-          <StatsCard title="訓練回数" value="12" subtitle="今年" />
-          <StatsCard title="達成率" value="87%" subtitle="目標達成率" />
+          <StatsCard title="参加者数" value={totalParticipants} subtitle="累計参加者" />
+          <StatsCard title="訓練回数" value={totalDrills} subtitle="取得済み投稿数" />
+          <StatsCard title="訓練種別数" value={chartData.length} subtitle="分類数" />
         </section>
 
         <section>
-          <Chart />
+          <Chart chartData={chartData} />
         </section>
 
         <section>
-          <Map />
+          <Map reports={reports} />
         </section>
       </main>
     </div>
