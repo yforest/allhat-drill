@@ -1,79 +1,66 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import apiClient from '../api/client';
-import { CONFIG } from '../config';
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-type User = { user_email: string; user_display_name?: string; user_nicename?: string };
+type User = any;
+
 type AuthContextType = {
-  token: string | null;
   user: User | null;
-  isAuthReady: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  token: string | null;
+  isAuthenticated: boolean;
+  login: () => void;
   logout: () => void;
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  login: () => {},
+  logout: () => {}
+});
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('allhat_auth_token');
-    const savedUser = localStorage.getItem('allhat_user');
-    if (savedToken) {
-      setToken(savedToken);
-      // axios インスタンスのヘッダは interceptor が参照するので localStorage に入れれば OK
-    }
-    if (savedUser) {
+    const t = localStorage.getItem("allhat_auth_token");
+    setToken(t);
+    if (t) {
+      // 既存で保存している user 情報があれば読み込む（任意）
       try {
-        setUser(JSON.parse(savedUser));
+        const u = localStorage.getItem("allhat_auth_user");
+        if (u) setUser(JSON.parse(u));
       } catch {
         setUser(null);
       }
+    } else {
+      setUser(null);
     }
-    setIsAuthReady(true);
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const payload = { username, password };
-    const res = await apiClient.post(CONFIG.ENDPOINTS.TOKEN, payload);
-    const newToken = res.data?.token;
-    if (!newToken) throw new Error('トークンが返却されませんでした');
-    const newUser: User = {
-      user_email: res.data?.user_email,
-      user_display_name: res.data?.user_display_name,
-      user_nicename: res.data?.user_nicename,
-    };
-    setToken(newToken);
-    setUser(newUser);
-    try {
-      localStorage.setItem('allhat_auth_token', newToken);
-      localStorage.setItem('allhat_user', JSON.stringify(newUser));
-    } catch {
-      // noop
-    }
-    return;
+  // login は WP のログインページへ遷移させる（React 側で認証処理は行わない）
+  const login = () => {
+    const WP_LOGIN_URL = "https://hitobou.com/allhat/drill/wpcms/wp-login.php";
+    window.location.href = WP_LOGIN_URL;
   };
 
+  // logout は WP のログアウト URL へ遷移させ、localStorage の token/user を削除
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    try {
-      localStorage.removeItem('allhat_auth_token');
-      localStorage.removeItem('allhat_user');
-    } catch {}
+    localStorage.removeItem("allhat_auth_token");
+    localStorage.removeItem("allhat_auth_user");
+    const WP_LOGOUT_URL = "https://hitobou.com/allhat/drill/wpcms/wp-login.php?action=logout";
+    window.location.href = WP_LOGOUT_URL;
   };
 
-  return (
-    <AuthContext.Provider value={{ token, user, isAuthReady, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+  const value: AuthContextType = {
+    user,
+    token,
+    isAuthenticated: !!token,
+    login,
+    logout
+  };
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-}
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => useContext(AuthContext);
