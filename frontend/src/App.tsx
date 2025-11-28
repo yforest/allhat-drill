@@ -4,11 +4,9 @@ import Chart from "./components/Chart";
 import StatsCard from "./components/StatsCard";
 import ReportList from "./components/ReportList";
 import useDataFetch from "./hooks/useDataFetch";
-import { useAuth } from "./contexts/AuthContext";
 
 export default function App() {
   const { data, isLoading, error } = useDataFetch();
-  const { user, logout } = useAuth();
 
   if (isLoading) {
     return (
@@ -32,85 +30,42 @@ export default function App() {
   const totalDrills = data?.totalDrills ?? 0;
   const chartData = data?.chartData ?? [];
 
-  const displayName = (user as any)?.user_display_name ?? (user as any)?.display_name ?? (user as any)?.user_email ?? "ゲスト";
-
-  const WP_NEW_POST_URL = "https://hitobou.com/allhat/drill/wpcms/wp-admin/post-new.php";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">ALL HAT 防災ダッシュボード</h1>
-          <div className="flex gap-4 items-center">
-            <button
-              onClick={() => {
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="px-4 py-2 rounded bg-gray-200"
-            >
-              ダッシュボード
-            </button>
-
-            <button
-              onClick={() => {
-                window.location.href = WP_NEW_POST_URL;
-              }}
-              className="px-4 py-2 rounded bg-blue-600 text-white"
-            >
-              WP投稿画面へ
-            </button>
-
-            <div className="text-sm text-gray-600">{displayName}</div>
-
-            <button
-              onClick={() => {
-                logout();
-              }}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              ログアウト (WP)
-            </button>
-          </div>
+        <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+          <h1 className="text-2xl font-bold text-gray-900">ALL HAT 防災訓練報告サイト</h1>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <a href={WP_NEW_POST_URL} target="_blank" rel="noreferrer" className="block">
-            <div className="cursor-pointer bg-gradient-to-r from-green-400 to-teal-500 text-white rounded-lg p-6 shadow-md hover:scale-[1.01] transition-transform">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-2xl font-bold">新規報告を行う（WPへ）</h3>
-                  <p className="mt-1 text-sm opacity-90">
-                    投稿は WordPress 管理画面から行ってください。写真や位置情報の保存は WP 上で行われます。
-                  </p>
-                </div>
-                <div className="text-4xl opacity-90">＋</div>
-              </div>
-            </div>
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <StatsCard title="総参加者数" value={totalParticipants} />
-          <StatsCard title="訓練実施回数" value={totalDrills} />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <div className="bg-white p-6 rounded-lg shadow min-h-64">
-            <h2 className="text-xl font-semibold mb-4">訓練種別分布</h2>
-            <Chart data={chartData} />
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-4">実施地域マップ</h2>
-            <Map reports={reports} />
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow">
+      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+        {/* 最新の報告 */}
+        <section className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">最近の報告</h2>
           <ReportList reports={reports} />
-        </div>
+        </section>
+
+        {/* 訓練種別分布 */}
+        <section className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4">訓練種別分布</h2>
+          <div className="w-full" style={{ minHeight: 220 }}>
+            <Chart data={chartData} />
+          </div>
+        </section>
+
+        {/* 地図 */}
+        <section className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4">実施地域マップ</h2>
+          <div style={{ height: 480 }}>
+            <Map reports={reports} />
+          </div>
+        </section>
+
+        {/* 統計カード（オプション） */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <StatsCard title="総参加者数" value={totalParticipants} />
+          <StatsCard title="訓練実施回数" value={totalDrills} />
+        </section>
       </main>
     </div>
   );
