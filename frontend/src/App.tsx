@@ -39,13 +39,13 @@ export default function App() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8 space-y-6">
-        {/* 最新の報告 */}
+        {/* 最新の投稿（2件まで、ページネーションあり） */}
         <section className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">最近の報告</h2>
+          <h2 className="text-xl font-semibold mb-4">最新の投稿</h2>
           <ReportList reports={reports} />
         </section>
 
-        {/* 訓練種別分布 */}
+        {/* 訓練種別分布（色分け） */}
         <section className="bg-white p-6 rounded-lg shadow">
           <h2 className="text-xl font-semibold mb-4">訓練種別分布</h2>
           <div className="w-full" style={{ minHeight: 220 }}>
@@ -61,7 +61,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* 統計カード（オプション） */}
+        {/* 統計カード（下に置いても良い） */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <StatsCard title="総参加者数" value={totalParticipants} />
           <StatsCard title="訓練実施回数" value={totalDrills} />
