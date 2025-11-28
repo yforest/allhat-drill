@@ -40,7 +40,7 @@ const ReportList: React.FC<Props> = ({ reports }) => {
 
   return (
     <div className="space-y-4">
-      {reports.map((r) => {
+      {reports.slice(0, 10).map((r) => {
         const acf = r.acf ?? {};
         const participants = acf.participants_count ?? '不明';
         const org = (acf as any).organization ?? '';

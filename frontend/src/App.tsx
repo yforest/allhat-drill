@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import './App.css';
 import Map from './components/Map';
 import Chart from './components/Chart';
@@ -11,10 +11,9 @@ import { useAuth } from './contexts/AuthContext';
 
 type View = 'dashboard' | 'report';
 
-const App: React.FC = () => {
+function App() {
   const { data, isLoading, error, refetch } = useDataFetch();
   const { user, logout } = useAuth();
-
   const [currentView, setCurrentView] = useState<View>('dashboard');
 
   if (isLoading) {
@@ -43,33 +42,46 @@ const App: React.FC = () => {
     );
   }
 
-  const reports = data?.reports ?? [];
-  const totalParticipants = data?.totalParticipants ?? 0;
-  const totalDrills = data?.totalDrills ?? 0;
-  const chartData = data?.chartData ?? [];
+  const reports = data?.reports || [];
+  const totalParticipants = data?.totalParticipants || 0;
+  const totalDrills = data?.totalDrills || 0;
+  const chartData = data?.chartData || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">ALL HAT 防災ダッシュボード</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            ALL HAT 防災ダッシュボード
+          </h1>
           <div className="flex gap-4 items-center">
             <button
               onClick={() => setCurrentView('dashboard')}
-              className={`px-4 py-2 rounded ${currentView === 'dashboard' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+              className={`px-4 py-2 rounded ${
+                currentView === 'dashboard'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200'
+              }`}
             >
               ダッシュボード
             </button>
             <button
               onClick={() => setCurrentView('report')}
-              className={`px-4 py-2 rounded ${currentView === 'report' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}
+              className={`px-4 py-2 rounded ${
+                currentView === 'report'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200'
+              }`}
             >
               報告投稿
             </button>
             <div className="text-sm text-gray-600">
               {user.user_display_name || user.user_email}
             </div>
-            <button onClick={logout} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            <button
+              onClick={logout}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
               ログアウト
             </button>
           </div>
@@ -103,15 +115,17 @@ const App: React.FC = () => {
         ) : (
           <div className="bg-white p-6 rounded-lg shadow">
             <h2 className="text-xl font-semibold mb-4">訓練報告を投稿</h2>
-            <ReportForm onSuccess={() => {
-              refetch();
-              setCurrentView('dashboard');
-            }} />
+            <ReportForm
+              onSuccess={() => {
+                void refetch();
+                setCurrentView('dashboard');
+              }}
+            />
           </div>
         )}
       </main>
     </div>
   );
-};
+}
 
 export default App;

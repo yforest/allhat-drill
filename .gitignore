@@ -6,7 +6,6 @@
 Viteのビルド出力フォルダ
 /frontend/.vscode
 /frontend/.npm
-/frontend/package-lock.json
 ------------------------------------
 2. Backend (WordPress)
 ------------------------------------
