@@ -91,11 +91,32 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
         {currentView === 'dashboard' ? (
           <>
+            {/* 統計カード */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <StatsCard title="総参加者数" value={totalParticipants} />
               <StatsCard title="訓練実施回数" value={totalDrills} />
             </div>
 
+            {/* 新規報告アクション（目立つカード形式） */}
+            <div className="mb-6">
+              <div
+                role="button"
+                onClick={() => setCurrentView('report')}
+                className="cursor-pointer bg-gradient-to-r from-green-400 to-teal-500 text-white rounded-lg p-6 shadow-md hover:scale-[1.01] transition-transform"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">新規報告を行う</h3>
+                    <p className="mt-1 text-sm opacity-90">
+                      訓練の実施報告を簡単操作で送信できます。写真や位置情報も添付可能です。
+                    </p>
+                  </div>
+                  <div className="text-4xl opacity-90">＋</div>
+                </div>
+              </div>
+            </div>
+
+            {/* グリッドレイアウト：チャートとマップ */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <div className="bg-white p-6 rounded-lg shadow min-h-64">
                 <h2 className="text-xl font-semibold mb-4">訓練種別分布</h2>
@@ -114,7 +135,15 @@ function App() {
           </>
         ) : (
           <div className="bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-4">訓練報告を投稿</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold">訓練報告を投稿</h2>
+              <button
+                onClick={() => setCurrentView('dashboard')}
+                className="px-3 py-1 text-sm bg-gray-200 rounded"
+              >
+                戻る
+              </button>
+            </div>
             <ReportForm
               onSuccess={() => {
                 void refetch();
