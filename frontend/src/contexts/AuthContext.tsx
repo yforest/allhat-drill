@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 type User = any;
 
@@ -26,7 +26,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const t = localStorage.getItem("allhat_auth_token");
     setToken(t);
     if (t) {
-      // 既存で保存している user 情報があれば読み込む（任意）
       try {
         const u = localStorage.getItem("allhat_auth_user");
         if (u) setUser(JSON.parse(u));
@@ -38,13 +37,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // login は WP のログインページへ遷移させる（React 側で認証処理は行わない）
   const login = () => {
     const WP_LOGIN_URL = "https://hitobou.com/allhat/drill/wpcms/wp-login.php";
     window.location.href = WP_LOGIN_URL;
   };
 
-  // logout は WP のログアウト URL へ遷移させ、localStorage の token/user を削除
   const logout = () => {
     localStorage.removeItem("allhat_auth_token");
     localStorage.removeItem("allhat_auth_user");
