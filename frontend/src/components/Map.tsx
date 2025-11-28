@@ -1,110 +1,88 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import apiClient from '../api/client';
-import { CONFIG } from '../config';
-import type { DrillReport } from '../types/api';
-import 'leaflet/dist/leaflet.css';
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { useMemo, useState, useEffect } from "react";
+import apiClient from "../api/client";
+import type { DrillReport } from "../types/api";
 
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: (import.meta.env.BASE_URL || '/') + 'marker-icon-2x.png',
-  iconUrl: (import.meta.env.BASE_URL || '/') + 'marker-icon.png',
-  shadowUrl: (import.meta.env.BASE_URL || '/') + 'marker-shadow.png',
-});
+type Props = {
+  reports: DrillReport[] | null;
+};
 
-function RecenterMap({ center }: { center: [number, number] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!map) return;
-    setTimeout(() => {
-      map.invalidateSize();
-      map.setView(center);
-    }, 0);
-  }, [map, center]);
-  return null;
-}
-
-type Props = { reports: DrillReport[] };
-
-function parseNumber(value: any): number | null {
-  if (value == null || value === '') return null;
-  const cleaned = String(value).replace(/[^\d.\-]/g, '');
-  const n = Number(cleaned);
-  return Number.isNaN(n) ? null : n;
-}
-
-export default function AppMap({ reports }: Props) {
+export default function Map({ reports }: Props) {
   const [mediaMap, setMediaMap] = useState<Record<number, string>>({});
 
-  const markers = useMemo(() => {
-    return reports
-      .map((post) => {
-        const acf = post.acf ?? {};
-        const lat = parseNumber(acf.location_lat ?? acf.lat ?? acf.latitude);
-        const lng = parseNumber(acf.location_lng ?? acf.lng ?? acf.longitude);
-        if (lat == null || lng == null) return null;
-        return {
-          id: post.id,
-          lat,
-          lng,
-          title: post.title?.rendered ?? '',
-          excerpt: post.excerpt?.rendered ?? post.content?.rendered ?? '',
-          featured_media: post.featured_media ?? 0,
-        };
-      })
-      .filter(Boolean) as {
-        id: number;
-        lat: number;
-        lng: number;
-        title: string;
-        excerpt: string;
-        featured_media: number;
-      }[];
+  useEffect(() => {
+    async function fetchMediaFor(reportsList: DrillReport[]) {
+      const map: Record<number, string> = {};
+      await Promise.all(
+        (reportsList || []).map(async (r) => {
+          if (r.featured_media) {
+            try {
+              const res = await apiClient.get(`/wp/v2/media/${r.featured_media}`);
+              map[r.featured_media] = res?.data?.source_url;
+            } catch {
+              // ignore
+            }
+          }
+        })
+      );
+      setMediaMap(map);
+    }
+    if (reports && reports.length > 0) fetchMediaFor(reports);
   }, [reports]);
 
-  useEffect(() => {
-    const ids = Array.from(new Set(markers.map((m) => m.featured_media).filter(Boolean)));
-    if (ids.length === 0) return;
-    ids.forEach((id) => {
-      if (mediaMap[id] !== undefined) return;
-      void apiClient
-        .get(`${CONFIG.ENDPOINTS.MEDIA}/${id}`)
-        .then((res) => {
-          const src = res.data?.source_url || '';
-          setMediaMap((prev) => ({ ...prev, [id]: src }));
-        })
-        .catch(() => {
-          setMediaMap((prev) => ({ ...prev, [id]: '' }));
-        });
-    });
-  }, [markers, mediaMap]);
+  const markers = useMemo(() => {
+    if (!reports) return [];
+    return reports
+      .map((r) => {
+        const lat =
+          typeof r.acf?.lat === "number"
+            ? r.acf.lat
+            : typeof r.acf?.lat === "string"
+            ? Number(r.acf.lat)
+            : null;
+        const lng =
+          typeof r.acf?.lng === "number"
+            ? r.acf.lng
+            : typeof r.acf?.lng === "string"
+            ? Number(r.acf.lng)
+            : null;
+        if (lat === null || lng === null || isNaN(lat) || isNaN(lng)) return null;
+        return {
+          id: r.id,
+          lat,
+          lng,
+          title:
+            r.title ??
+            (typeof r.raw?.title === "object" ? r.raw.title?.rendered : String(r.raw?.title ?? "")),
+          excerpt: typeof r.raw?.excerpt === "object" ? r.raw.excerpt?.rendered : r.content ?? "",
+          featured_media: r.featured_media ?? null,
+          drill_date: r.acf?.drill_date ?? null,
+        };
+      })
+      .filter(Boolean) as any[];
+  }, [reports]);
 
-  if (markers.length === 0) {
-    return <div className="h-96 w-full flex items-center justify-center bg-gray-100 rounded">まだ報告がありません</div>;
+  if (!markers.length) {
+    return <div>データがありません</div>;
   }
 
-  const center: [number, number] = [markers[0].lat, markers[0].lng];
-
   return (
-    <div className="h-96 w-full">
-      <MapContainer center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
-        <RecenterMap center={center} />
-        {markers.map((m) => (
-          <Marker key={m.id} position={[m.lat, m.lng]}>
-            <Popup>
-              <div className="max-w-xs">
-                <h3 className="font-semibold" dangerouslySetInnerHTML={{ __html: m.title }} />
-                {m.featured_media && mediaMap[m.featured_media] ? (
-                  <img src={mediaMap[m.featured_media]} className="w-full mt-2 rounded" alt="" />
-                ) : null}
-                <div className="mt-2 text-sm" dangerouslySetInnerHTML={{ __html: m.excerpt }} />
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
-    </div>
+    <MapContainer center={[markers[0].lat, markers[0].lng]} zoom={13} style={{ height: 400 }}>
+      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      {markers.map((m) => (
+        <Marker key={m.id} position={[m.lat, m.lng]}>
+          <Popup>
+            <div>
+              <strong>{m.title}</strong>
+              <div dangerouslySetInnerHTML={{ __html: m.excerpt ?? "" }} />
+              {m.drill_date && <div>訓練日: {m.drill_date}</div>}
+              {m.featured_media && mediaMap[m.featured_media] && (
+                <img src={mediaMap[m.featured_media]} alt="" style={{ maxWidth: "100%", marginTop: 8 }} />
+              )}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </MapContainer>
   );
 }

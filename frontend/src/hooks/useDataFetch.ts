@@ -1,116 +1,108 @@
-import { useEffect, useState, useCallback } from 'react';
-import apiClient from '../api/client';
-import type { AppData, DrillReport, DrillChartData } from '../types/api';
-import { CONFIG } from '../config';
+import { useCallback, useEffect, useState } from "react";
+import apiClient from "../api/client";
+import CONFIG from "../config";
+import type { DrillReport, AppData, DrillChartData } from "../types/api";
 
-const COLOR_PALETTE = ['#4F46E5', '#06B6D4', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-
-export type UseDataFetchResult = {
+type UseDataFetchResult = {
   data: AppData | null;
   isLoading: boolean;
-  error: Error | null;
+  error: any | null;
   refetch: () => Promise<void>;
 };
 
-const MOCK_POSTS: DrillReport[] = [
-  {
-    id: 1,
-    date: new Date().toISOString(),
-    title: { rendered: 'モック: シェイクアウト' },
-    content: { rendered: 'モックデータ' },
-    acf: { participants_count: 100, drill_types: 'シェイクアウト', location_lat: 34.697, location_lng: 135.216 }
-  },
-  {
-    id: 2,
-    date: new Date().toISOString(),
-    title: { rendered: 'モック: 炊き出し' },
-    content: { rendered: 'モックデータ2' },
-    acf: { participants_count: 50, drill_types: '炊き出し', location_lat: 34.698, location_lng: 135.217 }
-  }
-];
-
-function parseNumber(value: any): number | null {
-  if (value == null || value === '') return null;
-  const cleaned = String(value).replace(/[^\d.\-]/g, '');
-  const n = Number(cleaned);
-  return Number.isNaN(n) ? null : n;
+function parseNumber(v: any): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") return isNaN(v) ? null : v;
+  const s = String(v).replace(/[^\d\.\-]/g, "");
+  if (s === "") return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
 }
 
-export function useDataFetch(): UseDataFetchResult {
+export default function useDataFetch(): UseDataFetchResult {
   const [data, setData] = useState<AppData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<any | null>(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await apiClient.get<DrillReport[]>(CONFIG.ENDPOINTS.POSTS);
+      const res = await apiClient.get(CONFIG.ENDPOINTS.POSTS + "?per_page=100&acf_format=standard");
       const posts = Array.isArray(res.data) ? res.data : [];
-      const effectivePosts = posts.length > 0 ? posts : MOCK_POSTS;
 
-      const normalized = effectivePosts.map((post) => {
-        const acf = post.acf ?? {};
-        return {
-          ...post,
-          acf: {
-            ...acf,
-            participants_count: parseNumber(acf.participants_count),
-            location_lat: parseNumber(acf.location_lat ?? acf.lat ?? acf.latitude),
-            location_lng: parseNumber(acf.location_lng ?? acf.lng ?? acf.longitude),
+      const reports: DrillReport[] = posts.map((p: any) => {
+        const acf = p.acf || {};
+        const latCandidates = [acf.lat, acf.location_lat, acf.latitude, p.meta?.lat];
+        const lngCandidates = [acf.lng, acf.location_lng, acf.longitude, p.meta?.lng];
+
+        const lat = (() => {
+          for (const c of latCandidates) {
+            const n = parseNumber(c);
+            if (n !== null) return n;
           }
-        };
+          return null;
+        })();
+
+        const lng = (() => {
+          for (const c of lngCandidates) {
+            const n = parseNumber(c);
+            if (n !== null) return n;
+          }
+          return null;
+        })();
+
+        const participants = parseNumber(acf.participants_count ?? acf.participant_count ?? acf.participants) ?? null;
+
+        return {
+          id: p.id,
+          title: typeof p.title === "object" ? p.title?.rendered ?? "" : p.title ?? "",
+          content: typeof p.content === "object" ? p.content?.rendered ?? "" : p.content ?? "",
+          date: p.date ?? p.modified ?? null,
+          acf: {
+            lat: lat,
+            lng: lng,
+            drill_date: acf.drill_date ?? null,
+            participants_count: participants,
+            drill_types: Array.isArray(acf.drill_types) ? acf.drill_types : (acf.drill_types ? [acf.drill_types] : [])
+          },
+          featured_media: p.featured_media ?? null,
+          raw: p
+        } as DrillReport;
       });
 
+      // 集計とチャートデータ作成
       let totalParticipants = 0;
-      const typeCounts: Record<string, number> = {};
+      const drillTypeCounts: Record<string, number> = {};
 
-      normalized.forEach((post) => {
-        const acf = post.acf ?? {};
-        const pc = parseNumber(acf.participants_count) || 0;
+      for (const r of reports) {
+        const pc = typeof r.acf?.participants_count === "number" ? r.acf.participants_count : parseNumber(r.acf?.participants_count) ?? 0;
         totalParticipants += pc;
-        const typesRaw = String(acf.drill_types ?? '').trim();
-        if (typesRaw) {
-          typesRaw.split(',').map(t => t.trim()).filter(Boolean).forEach(t => {
-            typeCounts[t] = (typeCounts[t] || 0) + 1;
-          });
-        }
-      });
 
-      const chartData: DrillChartData[] = Object.entries(typeCounts).map(([name, value], idx) => ({
-        name,
-        value,
-        color: COLOR_PALETTE[idx % COLOR_PALETTE.length],
+        const dts = Array.isArray(r.acf?.drill_types) ? r.acf!.drill_types : [];
+        for (const dt of dts) {
+          if (!dt) continue;
+          drillTypeCounts[dt] = (drillTypeCounts[dt] || 0) + 1;
+        }
+      }
+
+      const chartData: DrillChartData[] = Object.keys(drillTypeCounts).map(key => ({
+        name: key,
+        value: drillTypeCounts[key],
+        color: "#60A5FA" // デフォルト色（必要なら色割り当てロジックを追加）
       }));
 
-      setData({
-        reports: normalized,
+      const appData: AppData = {
+        reports,
         totalParticipants,
-        totalDrills: normalized.length,
-        chartData,
-      });
-    } catch (err: any) {
-      setError(err instanceof Error ? err : new Error(String(err)));
-      // フォールバック
-      const posts = MOCK_POSTS;
-      let totalParticipants = 0;
-      const typeCounts: Record<string, number> = {};
-      posts.forEach((post) => {
-        const pc = parseNumber(post.acf?.participants_count) || 0;
-        totalParticipants += pc;
-        const typesRaw = String(post.acf?.drill_types ?? '').trim();
-        if (typesRaw) {
-          typesRaw.split(',').map(t => t.trim()).filter(Boolean).forEach(t => {
-            typeCounts[t] = (typeCounts[t] || 0) + 1;
-          });
-        }
-      });
-      const chartData: DrillChartData[] = Object.entries(typeCounts).map(([name, value], idx) => ({
-        name,
-        value,
-        color: COLOR_PALETTE[idx % COLOR_PALETTE.length],
-      }));
-      setData({ reports: posts, totalParticipants, totalDrills: posts.length, chartData });
+        totalDrills: reports.length,
+        chartData
+      };
+
+      setData(appData);
+    } catch (err) {
+      console.error("データ取得エラー:", err);
+      setError(err);
     } finally {
       setIsLoading(false);
     }
@@ -120,9 +112,5 @@ export function useDataFetch(): UseDataFetchResult {
     void fetchData();
   }, [fetchData]);
 
-  const refetch = async () => {
-    await fetchData();
-  };
-
-  return { data, isLoading, error, refetch };
+  return { data, isLoading, error, refetch: fetchData };
 }

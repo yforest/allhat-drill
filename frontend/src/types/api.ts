@@ -1,28 +1,24 @@
 // frontend/src/types/api.ts
 
-export interface CustomFields {
-  participants_count?: number | string | null;
-  drill_types?: string | null;
-  location_lat?: number | string | null;
-  location_lng?: number | string | null;
+export type CustomFields = {
   lat?: number | string | null;
   lng?: number | string | null;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
   drill_date?: string | null;
+  participants_count?: number | string | null;
+  drill_types?: string[] | string | null;
+  // 追加の ACF フィールドがある場合は許容
   [key: string]: any;
-}
+};
 
-export interface DrillReport {
+export type DrillReport = {
   id: number;
-  date: string;
-  title: { rendered: string };
-  content: { rendered: string };
-  excerpt?: { rendered: string };
-  acf?: CustomFields;
-  featured_media?: number;
-  [key: string]: any;
-}
+  title: string;
+  content: string;
+  date: string | null;
+  acf: CustomFields;
+  featured_media?: number | null;
+  raw?: any;
+};
 
 // recharts との互換性のためインデックスシグネチャを追加
 export interface DrillChartData {
